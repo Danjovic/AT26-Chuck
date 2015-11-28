@@ -1,0 +1,7 @@
+# License
+
+All Hardware is licensed under The TAPR Open Hardware License.
+See http://www.tapr.org/TAPR_Open_Hardware_License_v1.0.txt
+
+All software/firmware is licensed under GPL V2.0
+See http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
