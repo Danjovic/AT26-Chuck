@@ -1,0 +1,9 @@
+AT26-Chuck Licence
+
+This project is licensed under OSHW and GPL:
+
+# The hardware, printed circuit boards design, bill of materials, schematic diagrams, connection diagrams are licensed under OSHW
+
+# The firmware is licensed under GPL V2.0
+
+

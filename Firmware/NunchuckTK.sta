@@ -1,0 +1,62 @@
+
+ROM used: 1070 (26%)
+          1070 (26%) including unused fragments
+
+          1 Average locations per line
+          4 Average locations per statement
+
+RAM used: 29 (11%) at main() level
+          37 (14%) worst case
+
+Stack used: 4 worst case (out of 8 total available)
+
+Lines Stmts  %   Files
+----- ----- ---  -----
+  495   190  76  NunchuckTK.c
+  255     0   0  ..\..\..\..\..\..\..\..\PROGRA~2\PICC\devices\16f688.h
+   26     0   0  myI2C.h
+  154    60  24  myI2C.c
+----- -----
+  930   250 Total
+
+Page ROM  %  RAM   Vol Diff  Functions:
+---- --- --- ---   --- ----  ----------
+0     20   2   1             @delay_ms1
+ Inline        1   163  3.0  i2c_start_cond
+0     12   1   1   113  2.9  i2c_stop_cond
+0     20   2   2   169  3.4  i2c_write_bit
+0     15   1   2   115  2.9  i2c_read_bit
+0     50   5   7   348  6.7  i2c_write_byte
+0     25   2   5   274  6.0  i2c_read_byte
+0      8   1   0    25  1.2  read_SCL
+0      8   1   0    25  1.2  read_SDA
+0      5   0   0    21  0.9  clear_SCL
+0      5   0   0    21  0.9  clear_SDA
+0      2   0   0    35  0.2  arbitration_lost
+0    432  40   2  4743 11.5  MAIN
+0     10   1   0   134  1.3  desativa_saidas
+0     49   5   0   321  2.8  init_Nunchuck
+0    121  11   3   967  6.0  read_Nunchuck
+0     39   4   2   275  4.1  pisca_msg
+0    245  23   3  3603  8.1  configura_nunchuck
+
+Program metrics:
+    Functions               17
+    Statements              250
+    Comments                440
+    Volume (V)              16051
+    Difficilty (D)          65.8
+    Effort to implement (E) 1056374
+    Time to implement (T)   16 hours, 18 minutes
+    Est Delivered Bugs (B)  3
+    Cyclomatic Complexity   52
+    Maintainability (MI)    141
+
+ Segment     Used  Free
+-----------  ----  ----
+00000-00003     4  0  
+00004-007FF  1066  978  
+00800-00FFF     0  2048  
+
+
+

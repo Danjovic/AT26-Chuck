@@ -1,0 +1,117 @@
+004-005 @READ_PROGRAM_MEMORY8.P1
+019.6   C1OUT
+020     @SCRATCH
+021     @SCRATCH
+021     _RETURN_
+022     @SCRATCH
+023     @SCRATCH
+024     @SCRATCH
+025.0   started
+025.1   have_arbitration
+025.2   B1C
+025.3   B1Z
+025.4   B2C
+025.5   B2Z
+025.6   AFBC
+025.7   AFBZ
+026     config
+027     opcao_startup
+028     temp
+029     tries
+02A.0   USEAX
+02A.1   USEAY
+02A.2   MODAF
+02A.3   Z
+02A.4   C
+02B     X
+02C     Y
+02D     sX
+02E     sY
+02F-030 AX
+031-032 AY
+033-034 AZ
+035-036 calibrAX
+037-038 calibrAY
+039     AFModCont
+03A     configura_nunchuck.opcoes
+03A     read_Nunchuck.temp
+03A     MAIN.@SCRATCH1
+03B     i2c_read_byte.nack
+03B     i2c_write_byte.send_start
+03B     configura_nunchuck.conf
+03B     MAIN.@SCRATCH2
+03B     read_Nunchuck.@SCRATCH1
+03C     i2c_read_byte.send_stop
+03C     configura_nunchuck.a
+03C     i2c_write_byte.send_stop
+03C     read_Nunchuck.@SCRATCH2
+03D     i2c_write_byte.byte_
+03D     pisca_msg.codigo
+03D     i2c_read_byte.byte_
+03E     i2c_read_byte.bits
+03E     i2c_write_byte.bit
+03E     pisca_msg.@SCRATCH1
+03F.0   i2c_write_byte.nack
+03F     @delay_ms1.P1
+03F     i2c_read_byte.@SCRATCH1
+040.0   i2c_read_bit.bit
+040     i2c_start_cond.@SCRATCH1
+040     i2c_stop_cond.@SCRATCH1
+040     i2c_write_byte.@SCRATCH1
+041     i2c_read_bit.@SCRATCH1
+041     i2c_write_byte.@SCRATCH2
+042     i2c_write_bit.bit
+043     i2c_write_bit.@SCRATCH1
+10D-10E @READ_PROGRAM_MEMORY8.P1
+
+ROM Allocation:
+000E  @delay_ms1
+0070  i2c_start_cond
+0061  i2c_stop_cond
+003E  i2c_write_bit
+0052  i2c_read_bit
+006D  i2c_write_byte
+00D0  i2c_read_byte
+002A  read_SCL
+0022  read_SDA
+0039  clear_SCL
+0034  clear_SDA
+0032  arbitration_lost
+027E  MAIN
+0004  desativa_saidas
+009F  init_Nunchuck
+00E9  read_Nunchuck
+0162  pisca_msg
+0189  configura_nunchuck
+027E  @cinit
+
+Project Directory:
+    C:\Users\user\Desktop\Projetos\PIC\TK-Chuck\AT26-Chuck\Firmware\
+
+Project Files:
+    NunchuckTK.c
+    ..\..\..\..\..\..\..\..\PROGRA~2\PICC\devices\16f688.h
+    myI2C.h
+    myI2C.c
+
+Units:
+    NunchuckTK.c (main)
+
+Compiler Settings:
+    Processor:      PIC16F688
+    Pointer Size:   16
+    ADC Range:      0-255
+    Opt Level:      9
+    Short,Int,Long: UNSIGNED: 1,8,16
+    Float,Double:   32,32
+
+Output Files:
+    Errors:      NunchuckTK.err
+    Ext Symbols: NunchuckTK.esym
+    INHX8:       NunchuckTK.hex
+    Symbols:     NunchuckTK.sym
+    List:        NunchuckTK.lst
+    Debug/COFF:  NunchuckTK.cof
+    Project:     NunchuckTK.PJT
+    Call Tree:   NunchuckTK.tre
+    Statistics:  NunchuckTK.sta

@@ -1,0 +1,1789 @@
+CCS PCM C Compiler, Version 4.057, 32216               10-nov-15 23:43
+
+               Filename: NunchuckTK.lst
+
+               ROM used: 1070 words (26%)
+                         Largest free fragment is 2048
+               RAM used: 29 (11%) at main() level
+                         37 (14%) worst case
+               Stack:    4 locations
+
+*
+0000:  MOVLW  00
+0001:  MOVWF  0A
+0002:  GOTO   27E
+0003:  NOP
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                      Adaptador de Wii Nunchuck para joystick padrão ATARI                               /// 
+.................... ///                v1.01 25 de Outubro de 2012  - Daniel José Viana - danjovic@hotmail.com                  /// 
+.................... ///                - Basic Release                                                                          /// 
+.................... ///                                                                                                         /// 
+.................... ///                v1.1  12 de Fevereiro de 2013 - Daniel José Viana - danjovic@hotmail.com                 /// 
+.................... ///                - Changed I2C routines to support clock stretching                                       /// 
+.................... ///                - Simplified Nunhcuck detection. Works with oritginal, clone and wireless nunchucks      /// 
+.................... ///                                                                                                         /// 
+.................... ///                v1.11 16 de Fevereiro de 2013 - Daniel José Viana - danjovic@hotmail.com                 /// 
+.................... ///                - Changed blink engine and blink sequences for error and programming                     /// 
+.................... ///                                                                                                         /// 
+.................... ///                v1.12 25 de Maio de 2013 - Daniel José Viana - danjovic@hotmail.com                      /// 
+.................... ///                - Enhanced Initialization routine to detect initial position of the stick and buttons    /// 
+.................... ///                - Added Watchdog timer                                                                   /// 
+.................... ///                                                                                                         /// 
+.................... ///                v1.13 04 de Outubro de 2015 - Daniel José Viana - danjovic@hotmail.com                   /// 
+.................... ///                - Included conditional definitions for SQUARE INCH and TKCHUCK boards                    /// 
+.................... ///                - Code licence changed to GPL V2.0                                                       /// 
+.................... ///                                                                                                         /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+....................  
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                                    CONFIGURAÇÃO DO CHIP                                                 /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... #include <16f688.h> 
+.................... //////// Standard Header file for the PIC16F688 device //////////////// 
+.................... #device PIC16F688 
+.................... #list 
+....................  
+.................... #use delay(clock=8000000) 
+*
+000E:  MOVLW  3F
+000F:  MOVWF  04
+0010:  BCF    03.7
+0011:  MOVF   00,W
+0012:  BTFSC  03.2
+0013:  GOTO   021
+0014:  MOVLW  02
+0015:  MOVWF  21
+0016:  CLRF   20
+0017:  DECFSZ 20,F
+0018:  GOTO   017
+0019:  DECFSZ 21,F
+001A:  GOTO   016
+001B:  MOVLW  97
+001C:  MOVWF  20
+001D:  DECFSZ 20,F
+001E:  GOTO   01D
+001F:  DECFSZ 00,F
+0020:  GOTO   014
+0021:  RETLW  00
+.................... #fuses INTRC_IO, NOPROTECT, NOBROWNOUT, NOMCLR, WDT, PUT,  
+....................  
+.................... //#define TKCHUCK 
+.................... #define SQUARE 
+....................  
+....................  
+.................... #rom  0x2100 = {0x13,0x78,0x78} 
+.................... #ifdef TKCHUCK             // Definitions for SQUARE INCH Board 
+.................... #rom  0x2108 = {"sn:0000 Prototipo"} 
+.................... #endif 
+....................  
+.................... #ifdef SQUARE             // Definitions for SQUARE INCH Board 
+.................... #rom  0x2108 = {"AT26-Chuck"} 
+.................... #endif 
+....................  
+....................  
+....................  
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                                    DEFINIÇÃO DAS CONSTANTES                                             /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... #ifdef SQUARE             // Definitions for SQUARE INCH Board 
+....................  
+.................... #define BUTTON1  pin_a0 
+.................... #define LEFT     pin_a1 
+.................... #define RIGHT    pin_a2 
+.................... #define BUTTON3  pin_a3 
+.................... #define DOWN     pin_a4 
+.................... #define UP       pin_a5 
+....................  
+.................... #define BUTTON2  pin_c0 
+.................... #define P_SDA    pin_c1 
+.................... #define P_SCL    pin_c2 
+.................... #define LED      pin_c3 
+.................... #define p_TXD    pin_c4 
+.................... #define p_RXD    pin_c5 
+....................  
+.................... #endif 
+....................  
+....................  
+.................... #ifdef TKCHUCK             // Definitions for TK Chuck Board 
+....................  
+.................... #define BUTTON2  pin_a0 
+.................... #define RIGHT    pin_a1 
+.................... #define LEFT     pin_a2 
+.................... #define BUTTON3  pin_a3 
+.................... #define DOWN     pin_a4 
+.................... #define BUTTON1  pin_a5 
+....................  
+.................... #define UP       pin_c0 
+.................... #define VPLUS33  pin_c1 
+.................... #define P_SDA    pin_c2 
+.................... #define LED      pin_c3 
+.................... #define p_SCL    pin_c4 
+.................... #define VMINUS   pin_c5 
+....................  
+.................... #endif  
+....................  
+.................... #include "myI2C.h" 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///     I2C Library for PIC - Based on code published on Wikipedia                                          /// 
+.................... ///                                                                                                         /// 
+.................... ///     Daniel Jose Viana, October 2012 - danjovic@hotmail.com                                              /// 
+.................... ///                                                                                                         /// 
+.................... ///     This code is licensed under GPL V2.0                                                                /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... int1 read_SCL(void);  // Set SCL as input and return current level of line, 0 or 1 
+.................... int1 read_SDA(void);  // Set SDA as input and return current level of line, 0 or 1 
+.................... void clear_SCL(void); // Actively drive SCL signal low 
+.................... void clear_SDA(void); // Actively drive SDA signal low 
+.................... void arbitration_lost(void); 
+.................... int1 i2c_write_byte(int1 send_start,int1 send_stop,unsigned char byte_); 
+.................... int8 i2c_read_byte(int1 nack, int1 send_stop); 
+....................  
+....................  
+....................  
+.................... #define SCL_PIN  P_SCL 
+.................... #define SDA_PIN  P_SDA 
+....................  
+.................... #include "myI2C.c" 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///     I2C Library for PIC - Based on code published on Wikipedia                                          /// 
+.................... ///                                                                                                         /// 
+.................... ///     Daniel Jose Viana, October 2012 - danjovic@hotmail.com                                              /// 
+.................... ///                                                                                                         /// 
+.................... ///     This code is licensed under GPL V2.0                                                                /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... /* 
+.................... int1 read_SCL(void);  // Set SCL as input and return current level of line, 0 or 1 
+.................... int1 read_SDA(void);  // Set SDA as input and return current level of line, 0 or 1 
+.................... void clear_SCL(void); // Actively drive SCL signal low 
+.................... void clear_SDA(void); // Actively drive SDA signal low 
+.................... void arbitration_lost(void); 
+.................... int1 i2c_write_byte(int1 send_start,int1 send_stop,unsigned char byte_); 
+.................... int8 i2c_read_byte(int1 nack, int1 send_stop); 
+.................... */ 
+.................... int1 started = false; // global data 
+*
+0289:  BCF    25.0
+.................... int1 have_arbitration=true; 
+028A:  BSF    25.1
+....................  
+....................   
+.................... // 
+.................... //  I2C Routines 
+.................... // 
+.................... void i2c_start_cond(void) { 
+....................   if (started) { // if started, do a restart cond 
+*
+0070:  BTFSS  25.0
+0071:  GOTO   077
+....................     // set SDA to 1 
+....................     read_SDA(); 
+0072:  CALL   022
+....................     //I2C_delay(); 
+....................     while (read_SCL() == 0) {   // Clock stretching 
+0073:  CALL   02A
+0074:  MOVF   21,F
+0075:  BTFSC  03.2
+....................       // You should add timeout to this loop 
+....................     } 
+0076:  GOTO   073
+....................     // Repeated start setup time, minimum 4.7us 
+....................     //I2C_delay(); 
+....................   } 
+....................   if (read_SDA() == 0) { 
+0077:  CALL   022
+0078:  MOVF   21,F
+0079:  BTFSS  03.2
+007A:  GOTO   07C
+....................     arbitration_lost(); 
+007B:  CALL   032
+....................   } 
+....................   // SCL is high, set SDA from 1 to 0. 
+....................   clear_SDA(); 
+007C:  CALL   034
+....................   //I2C_delay(); 
+....................   clear_SCL(); 
+007D:  CALL   039
+....................   started = true; 
+007E:  BSF    25.0
+.................... } 
+....................   
+.................... void i2c_stop_cond(void){ 
+....................   // set SDA to 0 
+....................   clear_SDA(); 
+*
+0061:  CALL   034
+....................   //I2C_delay(); 
+....................   // Clock stretching 
+....................   while (read_SCL() == 0) { 
+0062:  CALL   02A
+0063:  MOVF   21,F
+0064:  BTFSC  03.2
+....................     // You should add timeout to this loop. 
+....................   } 
+0065:  GOTO   062
+....................   // Stop bit setup time, minimum 4us 
+....................   //I2C_delay(); 
+....................   // SCL is high, set SDA from 0 to 1 
+....................   if (read_SDA() == 0) { 
+0066:  CALL   022
+0067:  MOVF   21,F
+0068:  BTFSS  03.2
+0069:  GOTO   06B
+....................     arbitration_lost(); 
+006A:  CALL   032
+....................   } 
+....................   //I2C_delay(); 
+....................   started = false; 
+006B:  BCF    25.0
+.................... } 
+006C:  RETLW  00
+....................   
+.................... // Write a bit to I2C bus 
+.................... void i2c_write_bit(int1 bit) { 
+....................   if (bit) { 
+*
+003E:  MOVF   42,F
+003F:  BTFSC  03.2
+0040:  GOTO   043
+....................     read_SDA(); 
+0041:  CALL   022
+....................   } else { 
+0042:  GOTO   044
+....................     clear_SDA(); 
+0043:  CALL   034
+....................   } 
+....................   //I2C_delay(); 
+....................   while (read_SCL() == 0) {   // Clock stretching 
+0044:  CALL   02A
+0045:  MOVF   21,F
+0046:  BTFSC  03.2
+....................     // You should add timeout to this loop 
+....................   } 
+0047:  GOTO   044
+....................   // SCL is high, now data is valid 
+....................   // If SDA is high, check that nobody else is driving SDA 
+....................   if (bit && read_SDA() == 0) { 
+0048:  MOVF   42,F
+0049:  BTFSC  03.2
+004A:  GOTO   050
+004B:  CALL   022
+004C:  MOVF   21,F
+004D:  BTFSS  03.2
+004E:  GOTO   050
+....................     arbitration_lost(); 
+004F:  CALL   032
+....................   } 
+....................   //I2C_delay(); 
+....................   clear_SCL(); 
+0050:  CALL   039
+.................... } 
+0051:  RETLW  00
+....................   
+.................... // Read a bit from I2C bus 
+.................... int1 i2c_read_bit(void) { 
+....................   int1 bit; 
+....................   // Let the slave drive data 
+....................   read_SDA(); 
+0052:  CALL   022
+....................   //I2C_delay(); 
+....................   while (read_SCL() == 0) {   // Clock stretching 
+0053:  CALL   02A
+0054:  MOVF   21,F
+0055:  BTFSC  03.2
+....................     // You should add timeout to this loop 
+....................   } 
+0056:  GOTO   053
+....................   // SCL is high, now data is valid 
+....................   bit = read_SDA(); 
+0057:  CALL   022
+0058:  BCF    40.0
+0059:  BTFSC  21.0
+005A:  BSF    40.0
+....................   //I2C_delay(); 
+....................   clear_SCL(); 
+005B:  CALL   039
+....................   return bit; 
+005C:  MOVLW  00
+005D:  BTFSC  40.0
+005E:  MOVLW  01
+005F:  MOVWF  21
+.................... } 
+0060:  RETLW  00
+....................   
+.................... // Write a byte to I2C bus. Return 0 if ack by the slave. 
+.................... int1 i2c_write_byte(int1 send_start, 
+....................                     int1 send_stop, 
+....................                     unsigned char byte_) { 
+....................   unsigned bit; 
+....................   int1 nack; 
+....................   if (send_start) { 
+*
+006D:  MOVF   3B,F
+006E:  BTFSC  03.2
+006F:  GOTO   07F
+....................     i2c_start_cond(); 
+....................   } 
+....................   for (bit = 0; bit < 8; bit++) { 
+*
+007F:  CLRF   3E
+0080:  MOVF   3E,W
+0081:  SUBLW  07
+0082:  BTFSS  03.0
+0083:  GOTO   092
+....................     i2c_write_bit((byte_ & 0x80) != 0); 
+0084:  MOVF   3D,W
+0085:  ANDLW  80
+0086:  BTFSS  03.2
+0087:  GOTO   08A
+0088:  MOVLW  00
+0089:  GOTO   08B
+008A:  MOVLW  01
+008B:  MOVWF  41
+008C:  MOVWF  42
+008D:  CALL   03E
+....................     byte_ <<= 1; 
+008E:  BCF    03.0
+008F:  RLF    3D,F
+....................   } 
+0090:  INCF   3E,F
+0091:  GOTO   080
+....................   nack = i2c_read_bit(); 
+0092:  CALL   052
+0093:  BCF    3F.0
+0094:  BTFSC  21.0
+0095:  BSF    3F.0
+....................   if (send_stop) { 
+0096:  MOVF   3C,F
+0097:  BTFSC  03.2
+0098:  GOTO   09A
+....................     i2c_stop_cond(); 
+0099:  CALL   061
+....................   } 
+....................   return nack; 
+009A:  MOVLW  00
+009B:  BTFSC  3F.0
+009C:  MOVLW  01
+009D:  MOVWF  21
+.................... } 
+009E:  RETLW  00
+....................   
+.................... // Read a byte from I2C bus 
+.................... unsigned char i2c_read_byte(int1 nack, int1 send_stop) { 
+....................   unsigned char byte_ = 0; 
+*
+00D0:  CLRF   3D
+....................   unsigned bits; 
+....................   for (bits = 0; bits < 8; bits++) { 
+00D1:  CLRF   3E
+00D2:  MOVF   3E,W
+00D3:  SUBLW  07
+00D4:  BTFSS  03.0
+00D5:  GOTO   0DF
+....................     byte_ = (byte_ << 1) | i2c_read_bit(); 
+00D6:  BCF    03.0
+00D7:  RLF    3D,W
+00D8:  MOVWF  3F
+00D9:  CALL   052
+00DA:  MOVF   3F,W
+00DB:  IORWF  21,W
+00DC:  MOVWF  3D
+....................   } 
+00DD:  INCF   3E,F
+00DE:  GOTO   0D2
+....................   i2c_write_bit(nack); 
+00DF:  MOVF   3B,W
+00E0:  MOVWF  42
+00E1:  CALL   03E
+....................   if (send_stop) { 
+00E2:  MOVF   3C,F
+00E3:  BTFSC  03.2
+00E4:  GOTO   0E6
+....................     i2c_stop_cond(); 
+00E5:  CALL   061
+....................   } 
+....................   return byte_; 
+00E6:  MOVF   3D,W
+00E7:  MOVWF  21
+.................... } 
+00E8:  RETLW  00
+....................  
+.................... int1 read_SCL(void)  // Set SCL as input and return current level of line, 0 or 1 
+.................... { 
+....................   return input(SCL_PIN);  
+*
+002A:  BSF    03.5
+002B:  BSF    07.2
+002C:  MOVLW  00
+002D:  BCF    03.5
+002E:  BTFSC  07.2
+002F:  MOVLW  01
+0030:  MOVWF  21
+.................... } 
+0031:  RETLW  00
+.................... int1 read_SDA(void)  // Set SDA as input and return current level of line, 0 or 1 
+.................... { 
+....................   return input(SDA_PIN);  
+*
+0022:  BSF    03.5
+0023:  BSF    07.1
+0024:  MOVLW  00
+0025:  BCF    03.5
+0026:  BTFSC  07.1
+0027:  MOVLW  01
+0028:  MOVWF  21
+.................... } 
+0029:  RETLW  00
+.................... void clear_SCL(void) // Actively drive SCL signal low 
+.................... { 
+.................... 	output_low(SCL_PIN); 
+*
+0039:  BSF    03.5
+003A:  BCF    07.2
+003B:  BCF    03.5
+003C:  BCF    07.2
+.................... } 
+003D:  RETLW  00
+.................... void clear_SDA(void) // Actively drive SDA signal low 
+.................... { 
+.................... 	output_low(SDA_PIN); 
+*
+0034:  BSF    03.5
+0035:  BCF    07.1
+0036:  BCF    03.5
+0037:  BCF    07.1
+.................... } 
+0038:  RETLW  00
+.................... void arbitration_lost(void) {  //  
+.................... 	have_arbitration=false; 
+*
+0032:  BCF    25.1
+.................... } 
+0033:  RETLW  00
+....................  
+....................  
+....................  
+....................  
+.................... #define bit_b1c    0         // Bits do registro de configuração de operação 
+.................... #define bit_b1z    1  
+.................... #define bit_b2c    2 
+.................... #define bit_b2z    3 
+.................... #define bit_afbc   4 
+.................... #define bit_afbz   5 
+.................... #define bit_useax  6 
+.................... #define bit_useay  7 
+....................  
+.................... #define bit_Right  0         // Bits de opção de inicialização        
+.................... #define bit_Left   1 
+.................... #define bit_Up     2   
+.................... #define bit_Down   3 
+.................... #define bit_Z      4 
+.................... #define bit_C      5 
+....................  
+.................... #define treshold 32          // Limiar em torno do centro da manete analógica 
+.................... #define upper 128+treshold   // Limite superior 
+.................... #define lower 128-treshold   // Limite inferior 
+.................... #define tresholdA 64         // Limiar em torno do centro dos acelerômetros 
+.................... #define MAX_TRIES 4           // Tentativas de leituras iguais na inicialização. 
+....................  
+.................... #define MSG_ERRINIT 0x08 
+.................... #define MSG_CONFIG  0x3f 
+....................                           // Endereços na EEPROM  
+.................... #define config_address 0  // Configuração do adaptador 
+.................... #define calibX_address 1  // Calibração do acelerometro X (MSB) 
+.................... #define calibY_address 2  // Calibração do acelerometro X (MSB) 
+....................  
+.................... //#rom  0x2100={0x09,0x80,0x80}   // Inicializa endereços na eeprom 
+....................  
+....................  
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                                       PROTOTIPO DAS FUNCOES                                             /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... //  Desativa as saídas, colocando-as em alta impedância  
+.................... void desativa_saidas(void); 
+....................  
+.................... //  Inicializa Nunchuck e retorna estado Z=não respondeu  
+.................... int1 init_Nunchuck(void); 
+....................  
+.................... //  Faz leitura do Nunchuck e retorna estado Z=não respondeu  
+.................... int1 read_Nunchuck(); 
+....................  
+.................... //  Pisca o LED para indicar uma mensagem 
+.................... void pisca_msg(char codigo); 
+....................  
+.................... //  Configura nunchuck conforme posição da manete analogica e botoes durante o startup 
+.................... void configura_nunchuck(char opcoes); 
+....................  
+....................  
+....................  
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                                       INICIO DO PROGRAMA                                                /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... // 
+.................... // Definição das Variáveis 
+.................... // 
+.................... char config;         // Configuração do adaptador 
+.................... char opcao_startup;  // Opcao de inicializacao 
+.................... char temp;           // variavel temporaria 
+.................... char tries;          // quantidade de tentativas de leitura na inicialização 
+....................  
+.................... int1 B1C,            // Usa ou não Botão 1 conforme estado do botão C 
+....................      B1Z,            // Usa ou não Botão 1 conforme estado do botão Z 
+....................      B2C,            // Usa ou não Botão 2 conforme estado do botão C 
+....................      B2Z,            // Usa ou não Botão 2 conforme estado do botão Z 
+....................      AFBC,           // Auto Fire Botao C 
+....................      AFBZ,           // Auto Fire Botao Z 
+....................      USEAX,          // Opção de uso do acelerômetro X 
+....................      USEAY;          // Opção de uso do acelerômetro Y 
+....................  
+.................... int1 MODAF;          // Modulador do Auto Fire; 
+....................   
+.................... char X,Y;            // Eixos X e Y da manete mais . 
+.................... int1 Z,C;            // Botões  
+....................  
+.................... char sX,sY;          // Salva valor das manetes 
+.................... //int1 sZ,sC;          // e dos botoes para check no startup 
+....................  
+.................... int16 AX,AY,AZ;      // Eixos X, Y e Z dos acelerômtros 
+....................  
+.................... int16 calibrAX,       // Valor de calibração do acelerometro X 
+....................       calibrAY;       // Valor de calibração do acelerometro Y 
+....................  
+.................... char AFModCont=0; // Contador do modulador do auto fire. 
+*
+028B:  CLRF   39
+....................  
+.................... void main (void) { 
+*
+027E:  CLRF   04
+027F:  BCF    03.7
+0280:  MOVLW  1F
+0281:  ANDWF  03,F
+0282:  BCF    1F.6
+0283:  MOVLW  00
+0284:  BSF    03.5
+0285:  MOVWF  11
+0286:  MOVLW  07
+0287:  BCF    03.5
+0288:  MOVWF  19
+....................   // init hardware 
+....................   setup_oscillator( OSC_8MHZ ); 
+*
+028C:  MOVLW  71
+028D:  BSF    03.5
+028E:  MOVWF  0F
+028F:  MOVF   0F,W
+....................   setup_comparator(NC_NC_NC_NC); 
+0290:  MOVLW  07
+0291:  BCF    03.5
+0292:  MOVWF  19
+0293:  BSF    03.5
+0294:  MOVF   05,W
+0295:  MOVLW  06
+0296:  BCF    03.5
+0297:  MOVWF  20
+0298:  DECFSZ 20,F
+0299:  GOTO   298
+029A:  NOP
+029B:  MOVF   19,W
+029C:  BCF    0C.3
+....................   desativa_saidas(); 
+029D:  CALL   004
+....................   output_high(LED); 
+029E:  BSF    03.5
+029F:  BCF    07.3
+02A0:  BCF    03.5
+02A1:  BSF    07.3
+....................   delay_ms(100);  // espera alimentação estabilizar   
+02A2:  MOVLW  64
+02A3:  MOVWF  3F
+02A4:  CALL   00E
+....................   setup_wdt(WDT_2304MS); 
+02A5:  MOVLW  09
+02A6:  MOVWF  18
+02A7:  MOVLW  0F
+02A8:  MOVWF  20
+02A9:  MOVLW  07
+02AA:  CLRF   01
+02AB:  MOVLW  81
+02AC:  MOVWF  04
+02AD:  BCF    03.7
+02AE:  MOVF   00,W
+02AF:  ANDLW  F0
+02B0:  IORLW  07
+02B1:  MOVWF  00
+02B2:  CLRWDT
+02B3:  MOVF   00,W
+02B4:  ANDLW  F7
+02B5:  BTFSC  20.3
+02B6:  ANDLW  F0
+02B7:  IORWF  20,W
+02B8:  MOVWF  00
+....................  
+....................   //  
+....................   // Loop principal 
+....................   // 
+....................   for (;;) { 
+....................     // Testa presença do nunchuck 
+....................     if (init_Nunchuck()) { 
+02B9:  GOTO   09F
+02BA:  MOVF   21,F
+02BB:  BTFSC  03.2
+02BC:  GOTO   422
+....................        delay_ms(50); 
+02BD:  MOVLW  32
+02BE:  MOVWF  3F
+02BF:  CALL   00E
+....................        if (read_nunchuck()) { 
+02C0:  CALL   0E9
+02C1:  MOVF   21,F
+02C2:  BTFSC  03.2
+02C3:  GOTO   359
+....................           // Checa opção de startup 
+....................           read_nunchuck();   
+02C4:  CALL   0E9
+....................           sX=X; sY=Y; 
+02C5:  MOVF   2B,W
+02C6:  MOVWF  2D
+02C7:  MOVF   2C,W
+02C8:  MOVWF  2E
+....................           tries=MAX_TRIES; 
+02C9:  MOVLW  04
+02CA:  MOVWF  29
+....................           temp=20; 
+02CB:  MOVLW  14
+02CC:  MOVWF  28
+....................  
+.................... 	      while (temp>0 && tries>0){ 
+02CD:  MOVF   28,F
+02CE:  BTFSC  03.2
+02CF:  GOTO   2E9
+02D0:  MOVF   29,F
+02D1:  BTFSC  03.2
+02D2:  GOTO   2E9
+.................... 	           read_nunchuck(); 
+02D3:  CALL   0E9
+.................... 	           if (X==sX && Y==sY) 
+02D4:  MOVF   2D,W
+02D5:  SUBWF  2B,W
+02D6:  BTFSS  03.2
+02D7:  GOTO   2DE
+02D8:  MOVF   2E,W
+02D9:  SUBWF  2C,W
+02DA:  BTFSS  03.2
+02DB:  GOTO   2DE
+.................... 	               tries--; 
+02DC:  DECF   29,F
+.................... 	           else { 
+02DD:  GOTO   2E4
+.................... 		           sX=X; sY=Y; 
+02DE:  MOVF   2B,W
+02DF:  MOVWF  2D
+02E0:  MOVF   2C,W
+02E1:  MOVWF  2E
+.................... 		           tries=MAX_TRIES; 
+02E2:  MOVLW  04
+02E3:  MOVWF  29
+.................... 	           } 
+.................... 	           delay_ms(1); 
+02E4:  MOVLW  01
+02E5:  MOVWF  3F
+02E6:  CALL   00E
+.................... 	           temp--;	            
+02E7:  DECF   28,F
+....................           } 
+02E8:  GOTO   2CD
+....................           if (temp==0) break; //  
+02E9:  MOVF   28,F
+02EA:  BTFSC  03.2
+02EB:  GOTO   42D
+....................  
+....................                              
+....................           opcao_startup=0; 
+02EC:  CLRF   27
+....................           if (Z)       opcao_startup|=(1<<bit_Z);    // Botao Z 
+02ED:  BTFSC  2A.3
+02EE:  BSF    27.4
+....................           if (C)       opcao_startup|=(1<<bit_C);    // Botao C 
+02EF:  BTFSC  2A.4
+02F0:  BSF    27.5
+....................           if (X>upper) opcao_startup|=(1<<bit_Right);// Right 
+02F1:  MOVF   2B,W
+02F2:  SUBLW  A0
+02F3:  BTFSS  03.0
+02F4:  BSF    27.0
+....................           if (X<lower) opcao_startup|=(1<<bit_Left); // Left 
+02F5:  MOVF   2B,W
+02F6:  SUBLW  5F
+02F7:  BTFSC  03.0
+02F8:  BSF    27.1
+....................           if (Y>upper) opcao_startup|=(1<<bit_Up);   // Up 
+02F9:  MOVF   2C,W
+02FA:  SUBLW  A0
+02FB:  BTFSS  03.0
+02FC:  BSF    27.2
+....................           if (Y<lower) opcao_startup|=(1<<bit_Down); // Down 
+02FD:  MOVF   2C,W
+02FE:  SUBLW  5F
+02FF:  BTFSC  03.0
+0300:  BSF    27.3
+....................           if (opcao_startup)             // caso manete ou botoes não estejam em repouso na inicialização 
+0301:  MOVF   27,F
+0302:  BTFSC  03.2
+0303:  GOTO   307
+....................              configura_nunchuck(opcao_startup);  // Checa opção escolhida e cria configuração de operação 
+0304:  MOVF   27,W
+0305:  MOVWF  3A
+0306:  GOTO   189
+....................  
+....................           // Lê da EEPROM o modo de operação 
+....................           config=READ_EEPROM (config_address);  // Lê configuração da EEPROM 
+0307:  BSF    03.5
+0308:  CLRF   1B
+0309:  BCF    1C.7
+030A:  BSF    1C.0
+030B:  MOVF   1A,W
+030C:  BCF    03.5
+030D:  MOVWF  26
+....................             
+....................           if (config & (1<<bit_b1c)) B1C  =1; else B1C=0; 
+030E:  BTFSS  26.0
+030F:  GOTO   312
+0310:  BSF    25.2
+0311:  GOTO   313
+0312:  BCF    25.2
+....................           if (config & (1<<bit_b1z)) B1Z  =1; else B1Z=0; 
+0313:  BTFSS  26.1
+0314:  GOTO   317
+0315:  BSF    25.3
+0316:  GOTO   318
+0317:  BCF    25.3
+....................           if (config & (1<<bit_b2c)) B2C  =1; else B2C=0; 
+0318:  BTFSS  26.2
+0319:  GOTO   31C
+031A:  BSF    25.4
+031B:  GOTO   31D
+031C:  BCF    25.4
+....................           if (config & (1<<bit_b2z)) B2Z  =1; else B2Z=0; 
+031D:  BTFSS  26.3
+031E:  GOTO   321
+031F:  BSF    25.5
+0320:  GOTO   322
+0321:  BCF    25.5
+....................           if (config & (1<<bit_afbc)) AFBC  =1; else AFBC=0; 
+0322:  BTFSS  26.4
+0323:  GOTO   326
+0324:  BSF    25.6
+0325:  GOTO   327
+0326:  BCF    25.6
+....................           if (config & (1<<bit_afbz)) AFBZ  =1; else AFBZ=0; 
+0327:  BTFSS  26.5
+0328:  GOTO   32B
+0329:  BSF    25.7
+032A:  GOTO   32C
+032B:  BCF    25.7
+....................           if (config & (1<<bit_useax)) USEAX  =1; else USEAX=0; 
+032C:  BTFSS  26.6
+032D:  GOTO   330
+032E:  BSF    2A.0
+032F:  GOTO   331
+0330:  BCF    2A.0
+....................           if (config & (1<<bit_useay)) USEAY  =1; else USEAY=0; 
+0331:  BTFSS  26.7
+0332:  GOTO   335
+0333:  BSF    2A.1
+0334:  GOTO   336
+0335:  BCF    2A.1
+....................  
+....................           // Lê da EEPROM os vetores de calibração dos acelerometros 
+....................           temp=READ_EEPROM (calibX_address);  // Calibração do Eixo X 
+0336:  MOVLW  01
+0337:  BSF    03.5
+0338:  MOVWF  1B
+0339:  BCF    1C.7
+033A:  BSF    1C.0
+033B:  MOVF   1A,W
+033C:  BCF    03.5
+033D:  MOVWF  28
+....................           calibrAX=(int16)temp<<2; 
+033E:  CLRF   3B
+033F:  RLF    28,W
+0340:  MOVWF  35
+0341:  RLF    3B,W
+0342:  MOVWF  36
+0343:  RLF    35,F
+0344:  RLF    36,F
+0345:  MOVLW  FC
+0346:  ANDWF  35,F
+....................  
+....................           temp=READ_EEPROM (calibY_address);  // Calibração do Eixo Y 
+0347:  MOVLW  02
+0348:  BSF    03.5
+0349:  MOVWF  1B
+034A:  BCF    1C.7
+034B:  BSF    1C.0
+034C:  MOVF   1A,W
+034D:  BCF    03.5
+034E:  MOVWF  28
+....................           calibrAY=(int16)temp<<2; 
+034F:  CLRF   3B
+0350:  RLF    28,W
+0351:  MOVWF  37
+0352:  RLF    3B,W
+0353:  MOVWF  38
+0354:  RLF    37,F
+0355:  RLF    38,F
+0356:  MOVLW  FC
+0357:  ANDWF  37,F
+....................  
+....................        } else break;   
+0358:  GOTO   35A
+0359:  GOTO   42D
+....................  
+....................  
+....................          //                                                                                                  // 
+....................          //                Tarefa principal. Lê nunchuck, atualiza saídas conforme leitura                   // 
+....................          //           Se houver algum erro na leitura, sai e tenta inicializar novamente o nunchuck          // 
+....................          //                                                                                                  // 
+....................          while (read_nunchuck()) {  
+035A:  CALL   0E9
+035B:  MOVF   21,F
+035C:  BTFSC  03.2
+035D:  GOTO   422
+....................  
+....................             // Aguarda período de amostragem 
+....................             // 
+....................             restart_wdt(); 
+035E:  CLRWDT
+....................             delay_ms(10); // while (!GO); 
+035F:  MOVLW  0A
+0360:  MOVWF  3F
+0361:  CALL   00E
+....................             // processa Auto Fire 
+....................             // 
+....................             AFModCont++; 
+0362:  INCF   39,F
+....................             AFModCont&=3; // contador com modulo 4 
+0363:  MOVLW  03
+0364:  ANDWF  39,F
+....................             if (AFModCont==0)  
+0365:  MOVF   39,F
+0366:  BTFSS  03.2
+0367:  GOTO   36D
+....................               MODAF=!MODAF;    
+0368:  BTFSS  2A.2
+0369:  GOTO   36C
+036A:  BCF    2A.2
+036B:  GOTO   36D
+036C:  BSF    2A.2
+....................           
+....................  
+....................             // Atualisa saidas 
+....................             // 
+....................             // Botao 1 
+....................             if ( (Z&&B1Z&&(!AFBZ||MODAF))||(C&&B1C&&(!AFBC||MODAF)) ) output_low(BUTTON1); 
+036D:  BTFSS  2A.3
+036E:  GOTO   375
+036F:  BTFSS  25.3
+0370:  GOTO   375
+0371:  BTFSS  25.7
+0372:  GOTO   37D
+0373:  BTFSC  2A.2
+0374:  GOTO   37D
+0375:  BTFSS  2A.4
+0376:  GOTO   382
+0377:  BTFSS  25.2
+0378:  GOTO   382
+0379:  BTFSS  25.6
+037A:  GOTO   37D
+037B:  BTFSS  2A.2
+037C:  GOTO   382
+037D:  BSF    03.5
+037E:  BCF    05.0
+037F:  BCF    03.5
+0380:  BCF    05.0
+....................               else output_float(BUTTON1); 
+0381:  GOTO   385
+0382:  BSF    03.5
+0383:  BSF    05.0
+0384:  BCF    03.5
+....................             // Botao 2 
+....................             if ( (Z&&B2Z&&(!AFBZ||MODAF))||(C&&B2C&&(!AFBC||MODAF)) ) output_low(BUTTON2); 
+0385:  BTFSS  2A.3
+0386:  GOTO   38D
+0387:  BTFSS  25.5
+0388:  GOTO   38D
+0389:  BTFSS  25.7
+038A:  GOTO   395
+038B:  BTFSC  2A.2
+038C:  GOTO   395
+038D:  BTFSS  2A.4
+038E:  GOTO   39A
+038F:  BTFSS  25.4
+0390:  GOTO   39A
+0391:  BTFSS  25.6
+0392:  GOTO   395
+0393:  BTFSS  2A.2
+0394:  GOTO   39A
+0395:  BSF    03.5
+0396:  BCF    07.0
+0397:  BCF    03.5
+0398:  BCF    07.0
+....................               else output_float(BUTTON2); 
+0399:  GOTO   39D
+039A:  BSF    03.5
+039B:  BSF    07.0
+039C:  BCF    03.5
+....................             // RIGHT 
+....................             if ( (X>upper) || ((AX>(calibrAX+tresholdA)) && USEAX)  ) output_low(RIGHT); 
+039D:  MOVF   2B,W
+039E:  SUBLW  A0
+039F:  BTFSS  03.0
+03A0:  GOTO   3B4
+03A1:  MOVLW  40
+03A2:  ADDWF  35,W
+03A3:  MOVWF  21
+03A4:  MOVF   36,W
+03A5:  MOVWF  23
+03A6:  BTFSC  03.0
+03A7:  INCF   23,F
+03A8:  MOVF   23,W
+03A9:  SUBWF  30,W
+03AA:  BTFSS  03.0
+03AB:  GOTO   3B9
+03AC:  BTFSS  03.2
+03AD:  GOTO   3B2
+03AE:  MOVF   2F,W
+03AF:  SUBWF  21,W
+03B0:  BTFSC  03.0
+03B1:  GOTO   3B9
+03B2:  BTFSS  2A.0
+03B3:  GOTO   3B9
+03B4:  BSF    03.5
+03B5:  BCF    05.2
+03B6:  BCF    03.5
+03B7:  BCF    05.2
+....................               else output_float(RIGHT); 
+03B8:  GOTO   3BC
+03B9:  BSF    03.5
+03BA:  BSF    05.2
+03BB:  BCF    03.5
+....................             // LEFT 
+....................             if ( (X<lower) || ((AX<(calibrAX-tresholdA)) && USEAX)  ) output_low(LEFT); 
+03BC:  MOVF   2B,W
+03BD:  SUBLW  5F
+03BE:  BTFSC  03.0
+03BF:  GOTO   3D7
+03C0:  MOVLW  40
+03C1:  SUBWF  35,W
+03C2:  MOVWF  20
+03C3:  MOVF   36,W
+03C4:  MOVWF  23
+03C5:  MOVLW  00
+03C6:  BTFSS  03.0
+03C7:  MOVLW  01
+03C8:  SUBWF  23,F
+03C9:  MOVF   20,W
+03CA:  MOVWF  21
+03CB:  MOVF   30,W
+03CC:  SUBWF  23,W
+03CD:  BTFSS  03.0
+03CE:  GOTO   3DC
+03CF:  BTFSS  03.2
+03D0:  GOTO   3D5
+03D1:  MOVF   21,W
+03D2:  SUBWF  2F,W
+03D3:  BTFSC  03.0
+03D4:  GOTO   3DC
+03D5:  BTFSS  2A.0
+03D6:  GOTO   3DC
+03D7:  BSF    03.5
+03D8:  BCF    05.1
+03D9:  BCF    03.5
+03DA:  BCF    05.1
+....................               else output_float(LEFT); 
+03DB:  GOTO   3DF
+03DC:  BSF    03.5
+03DD:  BSF    05.1
+03DE:  BCF    03.5
+....................             // UP 
+....................             if ( (Y>upper) || ((AY>(calibrAY+tresholdA)) && USEAY)  ) output_low(UP); 
+03DF:  MOVF   2C,W
+03E0:  SUBLW  A0
+03E1:  BTFSS  03.0
+03E2:  GOTO   3F6
+03E3:  MOVLW  40
+03E4:  ADDWF  37,W
+03E5:  MOVWF  21
+03E6:  MOVF   38,W
+03E7:  MOVWF  23
+03E8:  BTFSC  03.0
+03E9:  INCF   23,F
+03EA:  MOVF   23,W
+03EB:  SUBWF  32,W
+03EC:  BTFSS  03.0
+03ED:  GOTO   3FB
+03EE:  BTFSS  03.2
+03EF:  GOTO   3F4
+03F0:  MOVF   31,W
+03F1:  SUBWF  21,W
+03F2:  BTFSC  03.0
+03F3:  GOTO   3FB
+03F4:  BTFSS  2A.1
+03F5:  GOTO   3FB
+03F6:  BSF    03.5
+03F7:  BCF    05.5
+03F8:  BCF    03.5
+03F9:  BCF    05.5
+....................               else output_float(UP); 
+03FA:  GOTO   3FE
+03FB:  BSF    03.5
+03FC:  BSF    05.5
+03FD:  BCF    03.5
+....................             // DOWN 
+....................             if ( (Y<lower) || ((AY<(calibrAY-tresholdA)) && USEAY)  ) output_low(DOWN); 
+03FE:  MOVF   2C,W
+03FF:  SUBLW  5F
+0400:  BTFSC  03.0
+0401:  GOTO   419
+0402:  MOVLW  40
+0403:  SUBWF  37,W
+0404:  MOVWF  20
+0405:  MOVF   38,W
+0406:  MOVWF  23
+0407:  MOVLW  00
+0408:  BTFSS  03.0
+0409:  MOVLW  01
+040A:  SUBWF  23,F
+040B:  MOVF   20,W
+040C:  MOVWF  21
+040D:  MOVF   32,W
+040E:  SUBWF  23,W
+040F:  BTFSS  03.0
+0410:  GOTO   41E
+0411:  BTFSS  03.2
+0412:  GOTO   417
+0413:  MOVF   21,W
+0414:  SUBWF  31,W
+0415:  BTFSC  03.0
+0416:  GOTO   41E
+0417:  BTFSS  2A.1
+0418:  GOTO   41E
+0419:  BSF    03.5
+041A:  BCF    05.4
+041B:  BCF    03.5
+041C:  BCF    05.4
+....................               else output_float(DOWN); 
+041D:  GOTO   421
+041E:  BSF    03.5
+041F:  BSF    05.4
+0420:  BCF    03.5
+....................  
+....................            }  // while  
+0421:  GOTO   35A
+....................          //break;   // se alcançou aqui, houve um erro de comunicação. 
+....................           
+....................       }  
+....................  
+....................     // Se alcançou este ponto, indica erro e tenta novamente após 1 segundo 
+....................     pisca_msg(MSG_ERRINIT); 
+0422:  MOVLW  08
+0423:  MOVWF  3D
+0424:  CALL   162
+....................     delay_ms(1000); 
+0425:  MOVLW  04
+0426:  MOVWF  3A
+0427:  MOVLW  FA
+0428:  MOVWF  3F
+0429:  CALL   00E
+042A:  DECFSZ 3A,F
+042B:  GOTO   427
+....................  
+....................   } // for (loop principal) 
+042C:  GOTO   2B9
+.................... }  // main 
+....................  
+....................  
+....................  
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+.................... ///                                                                                                         /// 
+.................... ///                                    IMPLEMENTACAO  DAS FUNCOES                                           /// 
+.................... ///                                                                                                         /// 
+.................... /////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+....................  
+.................... // 
+.................... //  Desativa as saídas, colocando-as em alta impedância  
+.................... // 
+.................... void desativa_saidas(void) { 
+....................   output_float(UP); 
+*
+0004:  BSF    03.5
+0005:  BSF    05.5
+*
+042D:  SLEEP
+....................   output_float(DOWN); 
+*
+0006:  BSF    05.4
+....................   output_float(LEFT); 
+0007:  BSF    05.1
+....................   output_float(RIGHT); 
+0008:  BSF    05.2
+....................   output_float(BUTTON1); 
+0009:  BSF    05.0
+....................   output_float(BUTTON2); 
+000A:  BSF    07.0
+....................   output_float(BUTTON3); 
+000B:  BSF    05.3
+.................... } 
+000C:  BCF    03.5
+000D:  RETLW  00
+....................  
+....................  
+.................... // 
+.................... //  INIT NUNCHUCK - Testa se dispositivo responde no barramento I2C 
+.................... // 
+.................... //  Zero=Erro  NZ = Inicializou OK 
+.................... int1 init_Nunchuck(void) { 
+....................  
+....................   i2c_write_byte(true,false,0xa4); 
+*
+009F:  MOVLW  01
+00A0:  MOVWF  3B
+00A1:  CLRF   3C
+00A2:  MOVLW  A4
+00A3:  MOVWF  3D
+00A4:  CALL   06D
+....................   i2c_write_byte(false,false,0xf0); 
+00A5:  CLRF   3B
+00A6:  CLRF   3C
+00A7:  MOVLW  F0
+00A8:  MOVWF  3D
+00A9:  CALL   06D
+....................   if (i2c_write_byte(false,true,0x55))  
+00AA:  CLRF   3B
+00AB:  MOVLW  01
+00AC:  MOVWF  3C
+00AD:  MOVLW  55
+00AE:  MOVWF  3D
+00AF:  CALL   06D
+00B0:  MOVF   21,F
+00B1:  BTFSC  03.2
+00B2:  GOTO   0B6
+....................      return false;  
+00B3:  MOVLW  00
+00B4:  MOVWF  21
+00B5:  GOTO   0CE
+....................       
+....................   i2c_write_byte(true,false,0xa4); 
+00B6:  MOVLW  01
+00B7:  MOVWF  3B
+00B8:  CLRF   3C
+00B9:  MOVLW  A4
+00BA:  MOVWF  3D
+00BB:  CALL   06D
+....................   i2c_write_byte(false,false,0xfb); 
+00BC:  CLRF   3B
+00BD:  CLRF   3C
+00BE:  MOVLW  FB
+00BF:  MOVWF  3D
+00C0:  CALL   06D
+....................   if (i2c_write_byte(false,true,0x00))  
+00C1:  CLRF   3B
+00C2:  MOVLW  01
+00C3:  MOVWF  3C
+00C4:  CLRF   3D
+00C5:  CALL   06D
+00C6:  MOVF   21,F
+00C7:  BTFSC  03.2
+00C8:  GOTO   0CC
+....................      return false;  
+00C9:  MOVLW  00
+00CA:  MOVWF  21
+00CB:  GOTO   0CE
+....................   return true; 
+00CC:  MOVLW  01
+00CD:  MOVWF  21
+.................... } 
+00CE:  BCF    0A.3
+00CF:  GOTO   2BA (RETURN)
+....................  
+....................  
+....................  
+.................... // 
+.................... //  Faz leitura do Nunchuck e retorna estado. False=não respondeu  
+.................... // 
+.................... int1 read_Nunchuck(){ 
+....................  
+....................   int8 temp; 
+....................    
+....................   // Send request 
+....................   i2c_write_byte(true,false,0xa4);   
+*
+00E9:  MOVLW  01
+00EA:  MOVWF  3B
+00EB:  CLRF   3C
+00EC:  MOVLW  A4
+00ED:  MOVWF  3D
+00EE:  CALL   06D
+....................   if (i2c_write_byte(false,true,0x00))  // if not acked, return false 
+00EF:  CLRF   3B
+00F0:  MOVLW  01
+00F1:  MOVWF  3C
+00F2:  CLRF   3D
+00F3:  CALL   06D
+00F4:  MOVF   21,F
+00F5:  BTFSC  03.2
+00F6:  GOTO   0FA
+....................      return false;  
+00F7:  MOVLW  00
+00F8:  MOVWF  21
+00F9:  GOTO   161
+....................   delay_ms(1);           // consider removing this 
+00FA:  MOVLW  01
+00FB:  MOVWF  3F
+00FC:  CALL   00E
+....................  
+....................   // receive report  
+....................   i2c_write_byte(true,false,0xa5);  // send read request. maybe check an ack here 
+00FD:  MOVLW  01
+00FE:  MOVWF  3B
+00FF:  CLRF   3C
+0100:  MOVLW  A5
+0101:  MOVWF  3D
+0102:  CALL   06D
+....................    
+....................   X  = i2c_read_byte(false, false);       // 1st byte: X axis 
+0103:  CLRF   3B
+0104:  CLRF   3C
+0105:  CALL   0D0
+0106:  MOVF   21,W
+0107:  MOVWF  2B
+....................   Y  = i2c_read_byte(false, false);       // 2nd byte: Y axis 
+0108:  CLRF   3B
+0109:  CLRF   3C
+010A:  CALL   0D0
+010B:  MOVF   21,W
+010C:  MOVWF  2C
+....................   AX = ((int16)i2c_read_byte(false, false)<<2);  // 3rd byte: Accelerometer X, msbits 
+010D:  CLRF   3B
+010E:  CLRF   3C
+010F:  CALL   0D0
+0110:  CLRF   3C
+0111:  RLF    21,W
+0112:  MOVWF  2F
+0113:  RLF    3C,W
+0114:  MOVWF  30
+0115:  RLF    2F,F
+0116:  RLF    30,F
+0117:  MOVLW  FC
+0118:  ANDWF  2F,F
+....................   AY = ((int16)i2c_read_byte(false, false)<<2);  // 4th byte: Accelerometer Y, msbits 
+0119:  CLRF   3B
+011A:  CLRF   3C
+011B:  CALL   0D0
+011C:  CLRF   3C
+011D:  RLF    21,W
+011E:  MOVWF  31
+011F:  RLF    3C,W
+0120:  MOVWF  32
+0121:  RLF    31,F
+0122:  RLF    32,F
+0123:  MOVLW  FC
+0124:  ANDWF  31,F
+....................   AZ = ((int16)i2c_read_byte(false, false)<<2);  // 5th byte: Accelerometer Z, msbits 
+0125:  CLRF   3B
+0126:  CLRF   3C
+0127:  CALL   0D0
+0128:  CLRF   3C
+0129:  RLF    21,W
+012A:  MOVWF  33
+012B:  RLF    3C,W
+012C:  MOVWF  34
+012D:  RLF    33,F
+012E:  RLF    34,F
+012F:  MOVLW  FC
+0130:  ANDWF  33,F
+....................   temp      =  i2c_read_byte(true, true);        // 6th byte: Accelerometers lsbits, buttons C,Z 
+0131:  MOVLW  01
+0132:  MOVWF  3B
+0133:  MOVWF  3C
+0134:  CALL   0D0
+0135:  MOVF   21,W
+0136:  MOVWF  3A
+....................  
+....................   AX+=((temp>>2) & 0x03);  // insert LSBits from accelerometers 
+0137:  RRF    3A,W
+0138:  MOVWF  20
+0139:  RRF    20,F
+013A:  MOVLW  3F
+013B:  ANDWF  20,F
+013C:  MOVF   20,W
+013D:  ANDLW  03
+013E:  ADDWF  2F,F
+013F:  BTFSC  03.0
+0140:  INCF   30,F
+....................   AY+=((temp>>4) & 0x03); 
+0141:  SWAPF  3A,W
+0142:  MOVWF  20
+0143:  MOVLW  0F
+0144:  ANDWF  20,F
+0145:  MOVF   20,W
+0146:  ANDLW  03
+0147:  ADDWF  31,F
+0148:  BTFSC  03.0
+0149:  INCF   32,F
+....................   AZ+=((temp>>6) & 0x03); 
+014A:  SWAPF  3A,W
+014B:  MOVWF  20
+014C:  RRF    20,F
+014D:  RRF    20,F
+014E:  MOVLW  03
+014F:  ANDWF  20,F
+0150:  MOVF   20,W
+0151:  ANDLW  03
+0152:  ADDWF  33,F
+0153:  BTFSC  03.0
+0154:  INCF   34,F
+....................  
+....................   C=( (temp&0x02)==0); 
+0155:  BCF    2A.4
+0156:  MOVF   3A,W
+0157:  ANDLW  02
+0158:  BTFSC  03.2
+0159:  BSF    2A.4
+....................   Z=( (temp&0x01)==0); 
+015A:  BCF    2A.3
+015B:  MOVF   3A,W
+015C:  ANDLW  01
+015D:  BTFSC  03.2
+015E:  BSF    2A.3
+....................    
+....................   return true; 
+015F:  MOVLW  01
+0160:  MOVWF  21
+.................... } //read_nunchuck 
+0161:  RETLW  00
+....................  
+....................  
+.................... // 
+.................... //  Pisca o LED para indicar uma mensagem 
+.................... // 
+.................... void pisca_msg(char codigo) { 
+.................... //  int k; 
+....................   desativa_saidas(); 
+0162:  CALL   004
+....................  
+....................   for (;codigo!=0x01;codigo>>=1) { 
+0163:  DECFSZ 3D,W
+0164:  GOTO   166
+0165:  GOTO   188
+....................       output_low(LED); // acende led 
+0166:  BSF    03.5
+0167:  BCF    07.3
+0168:  BCF    03.5
+0169:  BCF    07.3
+....................       if (codigo & 1 ) {// Piscada rapida 
+016A:  BTFSS  3D.0
+016B:  GOTO   177
+....................          delay_ms(100); 
+016C:  MOVLW  64
+016D:  MOVWF  3F
+016E:  CALL   00E
+....................          output_high(LED); // apaga led    
+016F:  BSF    03.5
+0170:  BCF    07.3
+0171:  BCF    03.5
+0172:  BSF    07.3
+....................          delay_ms(200);  
+0173:  MOVLW  C8
+0174:  MOVWF  3F
+0175:  CALL   00E
+....................       } else { 
+0176:  GOTO   185
+....................          delay_ms(500); // piscada lenta 
+0177:  MOVLW  02
+0178:  MOVWF  3E
+0179:  MOVLW  FA
+017A:  MOVWF  3F
+017B:  CALL   00E
+017C:  DECFSZ 3E,F
+017D:  GOTO   179
+....................          output_high(LED); // apaga led    
+017E:  BSF    03.5
+017F:  BCF    07.3
+0180:  BCF    03.5
+0181:  BSF    07.3
+....................          delay_ms(150);          
+0182:  MOVLW  96
+0183:  MOVWF  3F
+0184:  CALL   00E
+....................       }    
+....................   } // for 
+0185:  BCF    03.0
+0186:  RRF    3D,F
+0187:  GOTO   163
+....................  
+.................... } //pisca_msg 
+0188:  RETLW  00
+....................  
+....................  
+....................  
+.................... // 
+.................... //   Configura nunchuck conforme posição da manete analogica e botoes durante o startup 
+.................... // 
+.................... void configura_nunchuck(char opcoes) { 
+....................    char conf,a; 
+....................     
+....................    conf=READ_EEPROM(config_address); 
+0189:  BSF    03.5
+018A:  CLRF   1B
+018B:  BCF    1C.7
+018C:  BSF    1C.0
+018D:  MOVF   1A,W
+018E:  BCF    03.5
+018F:  MOVWF  3B
+....................    switch (opcoes) { // opcoes dos botoes  
+0190:  MOVF   3A,W
+0191:  XORLW  20
+0192:  BTFSC  03.2
+0193:  GOTO   1B0
+0194:  XORLW  30
+0195:  BTFSC  03.2
+0196:  GOTO   1B5
+0197:  XORLW  34
+0198:  BTFSC  03.2
+0199:  GOTO   1BA
+019A:  XORLW  30
+019B:  BTFSC  03.2
+019C:  GOTO   1BF
+019D:  XORLW  3C
+019E:  BTFSC  03.2
+019F:  GOTO   1C4
+01A0:  XORLW  30
+01A1:  BTFSC  03.2
+01A2:  GOTO   1C9
+01A3:  XORLW  1C
+01A4:  BTFSC  03.2
+01A5:  GOTO   1CE
+01A6:  XORLW  0C
+01A7:  BTFSC  03.2
+01A8:  GOTO   1F3
+01A9:  XORLW  0A
+01AA:  BTFSC  03.2
+01AB:  GOTO   1F6
+01AC:  XORLW  03
+01AD:  BTFSC  03.2
+01AE:  GOTO   21B
+01AF:  GOTO   262
+....................  
+....................      // C + neutro  ->  B2=C, Z=B1        
+....................      case (1<<bit_C):           
+....................                      conf&=~((1<<bit_b1c)|                          (1<<bit_b2z )|(1<<bit_afbc)|(1<<bit_afbz));     
+01B0:  MOVLW  C6
+01B1:  ANDWF  3B,F
+....................                      conf|= (             (1<<bit_b1z)|(1<<bit_b2c)                                          );                     
+01B2:  MOVLW  06
+01B3:  IORWF  3B,F
+....................                      break; 
+01B4:  GOTO   262
+....................  
+....................      // Z + neutro  ->  C=B1, Z=B1 
+....................      case (1<<bit_Z):      
+....................                      conf&=~(                          (1<<bit_b2c)|(1<<bit_b2z )|(1<<bit_afbc)|(1<<bit_afbz));     
+01B5:  MOVLW  C3
+01B6:  ANDWF  3B,F
+....................                      conf|= ((1<<bit_b1c)|(1<<bit_b1z)                                                       );  
+01B7:  MOVLW  03
+01B8:  IORWF  3B,F
+....................                      break; 
+01B9:  GOTO   262
+....................  
+....................      // C + up  ->  C=B2+AF, Z=B1   
+....................      case ((1<<bit_C)+(1<<bit_Up)):        
+....................                      conf&=~((1<<bit_b1c)|                          (1<<bit_b2z )|              (1<<bit_afbz));     
+01BA:  MOVLW  D6
+01BB:  ANDWF  3B,F
+....................                      conf|= (             (1<<bit_b1z)|(1<<bit_b2c)|              (1<<bit_afbc)              );  
+01BC:  MOVLW  16
+01BD:  IORWF  3B,F
+....................                      break; 
+01BE:  GOTO   262
+....................  
+....................      // Z + up  ->  C=B2+AF, Z=B1+AF   
+....................      case ((1<<bit_Z)+(1<<bit_Up)):        
+....................                      conf&=~((1<<bit_b1c)|                          (1<<bit_b2z )                            );     
+01BF:  MOVLW  F6
+01C0:  ANDWF  3B,F
+....................                      conf|= (             (1<<bit_b1z)|(1<<bit_b2c)|              (1<<bit_afbc)|(1<<bit_afbz));  
+01C1:  MOVLW  36
+01C2:  IORWF  3B,F
+....................                      break; 
+01C3:  GOTO   262
+....................  
+....................     // C + down  ->  C=B2, Z=B1+AF  
+....................     case ((1<<bit_C)+(1<<bit_Down)):       
+....................                      conf&=~((1<<bit_b1c)|                          (1<<bit_b2z )|(1<<bit_afbc)              );     
+01C4:  MOVLW  E6
+01C5:  ANDWF  3B,F
+....................                      conf|= (             (1<<bit_b1z)|(1<<bit_b2c)|                            (1<<bit_afbz));  
+01C6:  MOVLW  26
+01C7:  IORWF  3B,F
+....................                      break; 
+01C8:  GOTO   262
+....................  
+....................      // Z + down  ->  C=B1+AF, Z=B1  
+....................      case ((1<<bit_Z)+(1<<bit_Down)):       
+....................                      conf&=~(                          (1<<bit_b2c)|(1<<bit_b2z )|              (1<<bit_afbz));     
+01C9:  MOVLW  D3
+01CA:  ANDWF  3B,F
+....................                      conf|= ((1<<bit_b1c)|(1<<bit_b1z)|                           (1<<bit_afbc)              );  
+01CB:  MOVLW  13
+01CC:  IORWF  3B,F
+....................                      break; 
+01CD:  GOTO   262
+....................  
+....................  
+....................      // opcoes dos acelerometros 
+....................  
+....................      // up  ->  Use AY 
+....................      case (1<<bit_Up):                
+....................                      conf&=~((1<<bit_useax)               );     
+01CE:  BCF    3B.6
+....................                      conf|= (               (1<<bit_useay)); 
+01CF:  BSF    3B.7
+....................                      a=(int8)(AY>>2);                 // MSBits do valor do acelerômetro lido na inicialização 
+01D0:  RRF    32,W
+01D1:  MOVWF  23
+01D2:  RRF    31,W
+01D3:  MOVWF  22
+01D4:  RRF    23,F
+01D5:  RRF    22,F
+01D6:  MOVLW  3F
+01D7:  ANDWF  23,F
+01D8:  MOVF   22,W
+01D9:  MOVWF  3C
+....................                      WRITE_EEPROM(calibY_address,a);  // Armazena na EEPROM 
+01DA:  MOVLW  02
+01DB:  BSF    03.5
+01DC:  MOVWF  1B
+01DD:  BCF    03.5
+01DE:  MOVF   3C,W
+01DF:  BSF    03.5
+01E0:  MOVWF  1A
+01E1:  BSF    1C.2
+01E2:  BCF    03.5
+01E3:  MOVF   0B,W
+01E4:  MOVWF  20
+01E5:  BCF    0B.7
+01E6:  BSF    03.5
+01E7:  MOVLW  55
+01E8:  MOVWF  1D
+01E9:  MOVLW  AA
+01EA:  MOVWF  1D
+01EB:  BSF    1C.1
+01EC:  BTFSC  1C.1
+01ED:  GOTO   1EC
+01EE:  BCF    1C.2
+01EF:  BCF    03.5
+01F0:  MOVF   20,W
+01F1:  IORWF  0B,F
+....................                      break; 
+01F2:  GOTO   262
+....................  
+....................      // down  ->  desativa ação dos acelerometros 
+....................      case (1<<bit_Down):             
+....................                      conf&=~((1<<bit_useax)|(1<<bit_useay));     
+01F3:  MOVLW  3F
+01F4:  ANDWF  3B,F
+....................                    //conf|= ((1<<bit_useax)|(1<<bit_useax)); 
+....................                      break; 
+01F5:  GOTO   262
+....................  
+....................      // left  ->  Usa acelerometro no eixo X 
+....................      case (1<<bit_Left):             
+....................                      conf&=~(               (1<<bit_useay));     
+01F6:  BCF    3B.7
+....................                      conf|= ((1<<bit_useax)               ); 
+01F7:  BSF    3B.6
+....................                      a=(int8)(AX>>2);                 // MSBits do valor do acelerômetro lido na inicialização 
+01F8:  RRF    30,W
+01F9:  MOVWF  23
+01FA:  RRF    2F,W
+01FB:  MOVWF  22
+01FC:  RRF    23,F
+01FD:  RRF    22,F
+01FE:  MOVLW  3F
+01FF:  ANDWF  23,F
+0200:  MOVF   22,W
+0201:  MOVWF  3C
+....................                      WRITE_EEPROM(calibX_address,a);  // Armazena na EEPROM 
+0202:  MOVLW  01
+0203:  BSF    03.5
+0204:  MOVWF  1B
+0205:  BCF    03.5
+0206:  MOVF   3C,W
+0207:  BSF    03.5
+0208:  MOVWF  1A
+0209:  BSF    1C.2
+020A:  BCF    03.5
+020B:  MOVF   0B,W
+020C:  MOVWF  20
+020D:  BCF    0B.7
+020E:  BSF    03.5
+020F:  MOVLW  55
+0210:  MOVWF  1D
+0211:  MOVLW  AA
+0212:  MOVWF  1D
+0213:  BSF    1C.1
+0214:  BTFSC  1C.1
+0215:  GOTO   214
+0216:  BCF    1C.2
+0217:  BCF    03.5
+0218:  MOVF   20,W
+0219:  IORWF  0B,F
+....................                      break; 
+021A:  GOTO   262
+....................  
+....................      // right  ->  Usa acelerometro nos eixos X e Y 
+....................      case (1<<bit_Right):            
+....................                    //conf&=~((1<<bit_useax)|(1<<bit_useay));     
+....................                      conf|= ((1<<bit_useax)|(1<<bit_useay)); 
+021B:  MOVLW  C0
+021C:  IORWF  3B,F
+....................                      a=(int8)(AY>>2);                 // MSBits do valor do acelerômetro lido na inicialização 
+021D:  RRF    32,W
+021E:  MOVWF  23
+021F:  RRF    31,W
+0220:  MOVWF  22
+0221:  RRF    23,F
+0222:  RRF    22,F
+0223:  MOVLW  3F
+0224:  ANDWF  23,F
+0225:  MOVF   22,W
+0226:  MOVWF  3C
+....................                      WRITE_EEPROM(calibY_address,a);  // Armazena na EEPROM 
+0227:  MOVLW  02
+0228:  BSF    03.5
+0229:  MOVWF  1B
+022A:  BCF    03.5
+022B:  MOVF   3C,W
+022C:  BSF    03.5
+022D:  MOVWF  1A
+022E:  BSF    1C.2
+022F:  BCF    03.5
+0230:  MOVF   0B,W
+0231:  MOVWF  20
+0232:  BCF    0B.7
+0233:  BSF    03.5
+0234:  MOVLW  55
+0235:  MOVWF  1D
+0236:  MOVLW  AA
+0237:  MOVWF  1D
+0238:  BSF    1C.1
+0239:  BTFSC  1C.1
+023A:  GOTO   239
+023B:  BCF    1C.2
+023C:  BCF    03.5
+023D:  MOVF   20,W
+023E:  IORWF  0B,F
+....................                      a=(int8)(AX>>2);                 // MSBits do valor do acelerômetro lido na inicialização 
+023F:  RRF    30,W
+0240:  MOVWF  23
+0241:  RRF    2F,W
+0242:  MOVWF  22
+0243:  RRF    23,F
+0244:  RRF    22,F
+0245:  MOVLW  3F
+0246:  ANDWF  23,F
+0247:  MOVF   22,W
+0248:  MOVWF  3C
+....................                      WRITE_EEPROM(calibX_address,a);  // Armazena na EEPROM 
+0249:  MOVLW  01
+024A:  BSF    03.5
+024B:  MOVWF  1B
+024C:  BCF    03.5
+024D:  MOVF   3C,W
+024E:  BSF    03.5
+024F:  MOVWF  1A
+0250:  BSF    1C.2
+0251:  BCF    03.5
+0252:  MOVF   0B,W
+0253:  MOVWF  20
+0254:  BCF    0B.7
+0255:  BSF    03.5
+0256:  MOVLW  55
+0257:  MOVWF  1D
+0258:  MOVLW  AA
+0259:  MOVWF  1D
+025A:  BSF    1C.1
+025B:  BTFSC  1C.1
+025C:  GOTO   25B
+025D:  BCF    1C.2
+025E:  BCF    03.5
+025F:  MOVF   20,W
+0260:  IORWF  0B,F
+....................                      break; 
+0261:  GOTO   262
+....................     
+....................    }  // switch   
+....................    WRITE_EEPROM(config_address,conf);  // Atualiza opções na EEPROM 
+0262:  BSF    03.5
+0263:  CLRF   1B
+0264:  BCF    03.5
+0265:  MOVF   3B,W
+0266:  BSF    03.5
+0267:  MOVWF  1A
+0268:  BSF    1C.2
+0269:  BCF    03.5
+026A:  MOVF   0B,W
+026B:  MOVWF  20
+026C:  BCF    0B.7
+026D:  BSF    03.5
+026E:  MOVLW  55
+026F:  MOVWF  1D
+0270:  MOVLW  AA
+0271:  MOVWF  1D
+0272:  BSF    1C.1
+0273:  BTFSC  1C.1
+0274:  GOTO   273
+0275:  BCF    1C.2
+0276:  BCF    03.5
+0277:  MOVF   20,W
+0278:  IORWF  0B,F
+....................  
+....................    pisca_msg(MSG_CONFIG); 
+0279:  MOVLW  3F
+027A:  MOVWF  3D
+027B:  CALL   162
+....................  
+.................... } // configura_nunchuck 
+027C:  BCF    0A.3
+027D:  GOTO   307 (RETURN)
+
+Configuration Fuses:
+   Word  1: 3CCC   INTRC_IO NOPROTECT NOBROWNOUT NOMCLR NOCPD WDT PUT IESO FCMEN
+
+ROM data:
+002100: 0013 0078 0078 
+
+002108: 0041 0054 0032 0036 002D 0043 0068 0075 
+002110: 0063 006B 0000 

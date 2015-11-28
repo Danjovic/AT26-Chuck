@@ -1,0 +1,11 @@
+Partlist exported from C:/Users/user/Desktop/Projetos/PIC/TK-Chuck/AT26 Chuck.sch at 04/10/2015 22:17:50
+
+Qty Value      Device                  Part ID 
+1   78L33      Voltage Regulator       IC2   
+1   SUB09D     DB-9 Female Connector   K1    
+1   LED        LED 3mm Yellow          LED1  
+1   .1u        Ceramic Capacitor       C2 
+2   10u        Electrolytic Capacitor  C1, C3
+2   47k        1/8W Resistor           R1, R2
+1   560        1/8W Resistor           R3    
+1   PIC16F688P Microcontroller DIP14   IC1   

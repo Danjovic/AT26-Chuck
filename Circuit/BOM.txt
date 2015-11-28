@@ -1,0 +1,12 @@
+# AT26-Chuck Bill of Materials
+
+IC1   - PIC16F688, DIP14 Package PIC microcontroller 4K Flash, 14 pins
+IC2   - 78L33 Voltage Regulator, TO92 package
+LED1  - 3mm LED, Yellow 3mm LED, Yellow
+C1,C3 - 10uF/16V Electrolytic Capacitor, radial
+C2    - 100nf Polyester/Ceramic capacitor
+R1,R2 - 47K 1/4W Resistor, 1/4 Watt
+R3    - 560 Ohms 1/4W Resistor, 1/4 Watt
+K1    - DB-9 Female SUBD connector, 9 pins, female, pins for soldering
+
+
