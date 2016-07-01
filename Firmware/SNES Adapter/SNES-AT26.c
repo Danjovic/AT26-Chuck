@@ -1,24 +1,14 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///                                                                                                         ///
-///                      Adaptador de Wii Nunchuck para joystick padrão ATARI                               ///
-///                v1.01 25 de Outubro de 2012  - Daniel José Viana - danjovic@hotmail.com                  ///
-///                - Basic Release                                                                          ///
+///                         Adaptador de controde de SNES para padrão ATARI                                 ///
+///                           Baseado nos projetos AT26-Chuck e Digi[S]NES                                  ///
 ///                                                                                                         ///
-///                v1.1  12 de Fevereiro de 2013 - Daniel José Viana - danjovic@hotmail.com                 ///
-///                - Changed I2C routines to support clock stretching                                       ///
-///                - Simplified Nunhcuck detection. Works with oritginal, clone and wireless nunchucks      ///
+///                            Daniel José Viana 2016 - danjovic@hotmail.com                             
 ///                                                                                                         ///
-///                v1.11 16 de Fevereiro de 2013 - Daniel José Viana - danjovic@hotmail.com                 ///
-///                - Changed blink engine and blink sequences for error and programming                     ///
+///      v0.7 30 de junho de 206 - Daniel José Viana                                                            ///
+///      Versao Basica  - Basic Release                                                                          ///
 ///                                                                                                         ///
-///                v1.12 25 de Maio de 2013 - Daniel José Viana - danjovic@hotmail.com                      ///
-///                - Enhanced Initialization routine to detect initial position of the stick and buttons    ///
-///                - Added Watchdog timer                                                                   ///
-///                                                                                                         ///
-///                v1.13 04 de Outubro de 2015 - Daniel José Viana - danjovic@hotmail.com                   ///
-///                - Included conditional definitions for SQUARE INCH and TKCHUCK boards                    ///
-///                - Code licence changed to GPL V2.0                                                       ///
-///                                                                                                         ///
+///                           Este codigo e livre conforme licenca GPL V2.0                                 ///
 ///                                                                                                         ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,8 +24,6 @@
 #fuses INTRC_IO, NOPROTECT, NOBROWNOUT, NOMCLR, WDT, PUT, 
 
 #rom  0x2108 = {"SNES to Atari2600"}
-
-
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +47,11 @@
 #define latchPin pin_c5  // Latch line
 
 
-
+// Compatibilidade com funcoes de IO do Arduino do projeto Digi[S]NES
 #define uint16_t unsigned int16
 #define uint8_t unsigned char
 #define digitalWrite output_bit
 #define digitalRead  input
-
 #define HIGH 1
 #define LOW 0
 
@@ -94,18 +81,9 @@ uint16_t get_buttons(void);
 ///                                                                                                         ///
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-uint16_t Buttons_on_at_startup;
-uint16_t Buttons;
-
-int1 din;
-//boolean pinState = false; 
+uint16_t Buttons16;
 uint8_t Buttons_low;
 uint8_t Autofire_modulation,flip_flop=0;
-
-//char buttons_mask;   // Mascara dos bits para autofire
-//char HighByte ;       // B  Y  Sl St Up Dw Lf Rt  
-//char LowByte ;        // A  X  L  R  1  1  1  1 
-
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///                                                                                                         ///
@@ -125,14 +103,13 @@ void main (void) {
   delay_ms(100);  // espera alimentação estabilizar  
   setup_wdt(WDT_2304MS);
 
-
   output_high(clockPin);       //pinMode(clockPin,OUTPUT);
   output_low(latchPin);        //pinMode(latchPin,OUTPUT);
-  din=input(dataPin);              //pinMode(dataPin,INPUT);
+  output_float(dataPin);       //pinMode(dataPin,INPUT);
 
   // Now sample buttons and initialize autofire mask
-  Buttons_on_at_startup = get_buttons();
-  Autofire_modulation = (uint8_t)(Buttons_on_at_startup & 0xff);
+  Buttons16 = get_buttons();
+  Autofire_modulation = (uint8_t)(Buttons16 & 0xff);
   Autofire_modulation &= 0x3f; // Isolate Start and Select
   Autofire_modulation = ~Autofire_modulation; // invert bits.
   flip_flop = 0;
@@ -142,10 +119,10 @@ void main (void) {
   //
   for (;;) {
 	//Grab the buttons state. At this time B value is already at Data output
-	Buttons = get_buttons();
+	Buttons16 = get_buttons();
 
 	// fill in buttons                             7   6   5   4   3   2   1   0  bit
-	Buttons_low=(uint8_t)(Buttons & 0xff);    //   St  Sl  Tr  Tl  Y   B   A   X  button  
+	Buttons_low=(uint8_t)(Buttons16 & 0xff);    //   St  Sl  Tr  Tl  Y   B   A   X  button  
                  
 
 	// Now modulate buttons with autofire 
@@ -155,12 +132,22 @@ void main (void) {
 	
 
 	// Now test for the directional buttons
-	if (Buttons & (1<<11)) output_low(UP); else output_float(UP);  // Up
-	if (Buttons & (1<<10)) output_low(DOWN); else output_float(DOWN); //  Down
-	if (Buttons & (1<<9))  output_low(LEFT); else output_float(LEFT); //  Left
-	if (Buttons & (1<<8))  output_low(RIGHT); else output_float(RIGHT); // Right
+	if (Buttons16 & (1<<11)) output_low(UP); else output_float(UP);       // Up
+	if (Buttons16 & (1<<10)) output_low(DOWN); else output_float(DOWN);   //  Down
+	if (Buttons16 & (1<<9))  output_low(LEFT); else output_float(LEFT);   //  Left
+	if (Buttons16 & (1<<8))  output_low(RIGHT); else output_float(RIGHT); // Right
 
-	if (Buttons_low !=0xff) output_low(BUTTON1); else output_float(BUTTON1); //Button
+
+	if (Buttons_low !=0)  {                                               //Button 1
+		output_low(BUTTON1);
+		output_low(LED);      
+	} else { 
+		output_float(BUTTON1); 
+		output_high(LED);
+	} 
+
+	restart_wdt();
+
 
 	delay_ms(25);
 
